@@ -1,5 +1,6 @@
 import create from 'zustand';
 import { persist } from 'zustand/middleware';
+import { supabase } from './supabase';
 
 export const useNoteStore = create(
   persist(
@@ -47,8 +48,7 @@ export const useNoteStore = create(
     }
   )
 );
-=======
-import { supabase } from './supabase';
+
 
 // Notes functions
 export const getNotes = async () => {
