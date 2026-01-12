@@ -1,23 +1,17 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
-import { Button, Card, ProgressBar, RadioButton, Text, useTheme } from 'react-native-paper';
-import { useNoteStore } from './store'; // Import the store to find the note content
+import { ActivityIndicator, Alert, SafeAreaView, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { useNoteStore } from './store';
 
-// ⚠️ REPLACE THIS WITH YOUR ACTUAL OPENAI KEY ⚠️
-const API_KEY = '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'; 
+// ⚠️ Add EXPO_PUBLIC_OPENAI_KEY to .env
+const API_KEY = process.env.EXPO_PUBLIC_OPENAI_KEY; 
 
 export default function Quiz() {
-  const theme = useTheme();
-  
-  // 1. Get the noteId passed from the Home screen
   const { noteId } = useLocalSearchParams(); 
-  
-  // 2. Find the specific note in our store
   const notes = useNoteStore((state) => state.notes);
   const selectedNote = notes.find((n) => n.id === noteId);
+  const saveQuizResult = useNoteStore((state) => state.saveQuizResult);
 
-  // State
   const [loading, setLoading] = useState(true);
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -26,8 +20,7 @@ export default function Quiz() {
   const [score, setScore] = useState(0);
   const [showResult, setShowResult] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
-  const saveQuizResult = useNoteStore((state) => state.saveQuizResult);
-  // 3. EFFECT: When screen loads, call AI to generate quiz
+
   useEffect(() => {
     if (selectedNote) {
       generateQuiz(selectedNote.content);
@@ -35,9 +28,13 @@ export default function Quiz() {
   }, [selectedNote]);
 
   const generateQuiz = async (noteContent) => {
+    if (!API_KEY) {
+        Alert.alert("Error", "Missing API Key. Check .env configuration.");
+        setLoading(false);
+        return;
+    }
     try {
       setLoading(true);
-      
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -45,7 +42,7 @@ export default function Quiz() {
           'Authorization': `Bearer ${API_KEY}`,
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini", // Cheap and fast model
+          model: "gpt-4o-mini",
           messages: [
             {
               role: "system",
@@ -62,14 +59,10 @@ export default function Quiz() {
 
       const data = await response.json();
       
-      if (data.error) {
-        throw new Error(data.error.message);
-      }
+      if (data.error) throw new Error(data.error.message);
 
-      // Parse the JSON string from the AI
       let quizContent = data.choices[0].message.content;
-      
-      // Clean up markdown if AI adds it (e.g. ```json ... ```)
+      // Remove any markdown code blocks the AI might add
       quizContent = quizContent.replace(/```json/g, '').replace(/```/g, '').trim();
       
       const parsedQuestions = JSON.parse(quizContent);
@@ -78,22 +71,18 @@ export default function Quiz() {
 
     } catch (error) {
       console.error("AI Error:", error);
-      Alert.alert("Error", "Failed to generate quiz. Please check your API Key or internet.");
+      Alert.alert("Error", "Failed to generate quiz. Please try again.");
       setLoading(false);
       router.back();
     }
   };
-
-  // --- GAME LOGIC (Same as before) ---
-  const currentQuestion = questions[currentQuestionIndex];
-  const progress = questions.length > 0 ? (currentQuestionIndex + 1) / questions.length : 0;
 
   const handleOptionSelect = (index) => {
     if (isOptionSelected) return;
     setSelectedOptionIndex(index);
     setIsOptionSelected(true);
     setShowExplanation(true);
-    if (index === currentQuestion.correctIndex) setScore(score + 1);
+    if (index === questions[currentQuestionIndex].correctIndex) setScore(score + 1);
   };
 
   const handleNext = () => {
@@ -102,14 +91,11 @@ export default function Quiz() {
       setSelectedOptionIndex(null);
       setIsOptionSelected(false);
       setShowExplanation(false);
-    } else {// 1. Calculate final score
-      // (We need to add +1 if the LAST question was correct, because 'score' state updates slowly)
-      const isLastCorrect = selectedOptionIndex === currentQuestion?.correctIndex;
+    } else {
+      const isLastCorrect = selectedOptionIndex === questions[currentQuestionIndex]?.correctIndex;
       const finalScore = isLastCorrect ? score + 1 : score;
-      
       const percentage = Math.round((finalScore / questions.length) * 100);
 
-      // 2. Save to Store
       saveQuizResult({
         id: Date.now(),
         noteId: noteId,
@@ -117,121 +103,115 @@ export default function Quiz() {
         date: new Date().toISOString()
       });
 
-      setScore(finalScore); // Update UI state
+      setScore(finalScore);
       setShowResult(true);
     }
   };
 
-  // --- RENDER: LOADING STATE ---
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={{ marginTop: 20 }}>Reading your notes...</Text>
-        <Text variant="bodySmall" style={{ color: 'gray' }}>Generating questions with AI</Text>
+      <View className="flex-1 justify-center items-center bg-white dark:bg-black">
+        <ActivityIndicator size="large" color="#6366f1" />
+        <Text className="mt-4 text-slate-600 dark:text-slate-300 font-medium">Generating questions...</Text>
       </View>
     );
   }
 
-  // --- RENDER: RESULT SCREEN ---
   if (showResult) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.resultContainer}>
-          <Text variant="displayMedium" style={styles.emoji}>🏆</Text>
-          <Text variant="headlineMedium">Quiz Completed!</Text>
-          <Text variant="titleLarge" style={styles.scoreText}>
-            You scored {score} / {questions.length}
-          </Text>
-          <Button mode="contained" onPress={() => router.back()} style={styles.button}>
-            Back to Notes
-          </Button>
-        </View>
+      <SafeAreaView className="flex-1 bg-white dark:bg-black items-center justify-center p-6">
+        <Text className="text-6xl mb-4">🏆</Text>
+        <Text className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Quiz Completed!</Text>
+        <Text className="text-lg text-slate-500 dark:text-slate-400 mb-8">
+          You scored {score} / {questions.length}
+        </Text>
+        <TouchableOpacity 
+            onPress={() => router.back()} 
+            className="w-full bg-indigo-600 py-4 rounded-xl items-center"
+        >
+            <Text className="text-white font-bold text-base">Back to Notes</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
-  // --- RENDER: QUIZ SCREEN ---
+  const currentQuestion = questions[currentQuestionIndex];
+  const progressPercent = ((currentQuestionIndex + 1) / questions.length) * 100;
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Text variant="labelLarge">Question {currentQuestionIndex + 1}/{questions.length}</Text>
-          <ProgressBar progress={progress} color={theme.colors.primary} style={styles.progressBar} />
+    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-black">
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
+        
+        {/* Progress Bar */}
+        <View className="h-2 bg-slate-200 dark:bg-slate-800 rounded-full mb-6 overflow-hidden">
+            <View className="h-full bg-indigo-500" style={{ width: `${progressPercent}%` }} />
         </View>
 
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleLarge" style={styles.questionText}>{currentQuestion?.question}</Text>
-          </Card.Content>
-        </Card>
+        <View className="flex-row justify-between mb-4">
+            <Text className="text-slate-500 dark:text-slate-400 font-medium">Question {currentQuestionIndex + 1} of {questions.length}</Text>
+        </View>
 
-        <View style={styles.optionsContainer}>
+        {/* Question Card */}
+        <View className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm shadow-slate-200 dark:shadow-none mb-6 border border-slate-100 dark:border-slate-800">
+          <Text className="text-xl font-bold text-slate-900 dark:text-white leading-8">{currentQuestion?.question}</Text>
+        </View>
+
+        {/* Options */}
+        <View className="gap-3">
           {currentQuestion?.options.map((option, index) => {
-            let cardColor = "white"; 
+            let bgColor = "bg-white dark:bg-slate-900"; 
+            let borderColor = "border-slate-200 dark:border-slate-800";
+            
             if (isOptionSelected) {
-              if (index === currentQuestion.correctIndex) cardColor = "#d4edda";
-              else if (index === selectedOptionIndex) cardColor = "#f8d7da";
+              if (index === currentQuestion.correctIndex) {
+                  bgColor = "bg-emerald-100 dark:bg-emerald-900/30";
+                  borderColor = "border-emerald-500";
+              } else if (index === selectedOptionIndex) {
+                  bgColor = "bg-red-100 dark:bg-red-900/30";
+                  borderColor = "border-red-500";
+              }
             }
 
             return (
-              <Card 
+              <TouchableOpacity 
                 key={index} 
-                style={[styles.optionCard, { backgroundColor: cardColor }]}
+                activeOpacity={0.8}
+                disabled={isOptionSelected}
+                className={`p-4 rounded-xl border ${borderColor} ${bgColor} flex-row items-center`}
                 onPress={() => handleOptionSelect(index)}
               >
-                <View style={styles.optionRow}>
-                  <RadioButton
-                    value={index}
-                    status={selectedOptionIndex === index ? 'checked' : 'unchecked'}
-                    onPress={() => handleOptionSelect(index)}
-                    disabled={isOptionSelected}
-                  />
-                  <Text style={styles.optionText}>{option}</Text>
+                <View className={`w-6 h-6 rounded-full border-2 mr-3 justify-center items-center ${
+                    isOptionSelected && index === currentQuestion.correctIndex ? 'border-emerald-600' : 'border-slate-300 dark:border-slate-600'
+                }`}>
+                    {isOptionSelected && index === currentQuestion.correctIndex && <View className="w-3 h-3 bg-emerald-600 rounded-full" />}
                 </View>
-              </Card>
+                <Text className="text-base text-slate-700 dark:text-slate-200 flex-1">{option}</Text>
+              </TouchableOpacity>
             );
           })}
         </View>
 
+        {/* Explanation */}
         {showExplanation && (
-          <View style={styles.explanationBox}>
-            <Text style={{fontWeight: 'bold'}}>Explanation:</Text>
-            <Text>{currentQuestion.explanation}</Text>
+          <View className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border-l-4 border-blue-500">
+            <Text className="font-bold text-blue-800 dark:text-blue-300 mb-1">Explanation:</Text>
+            <Text className="text-blue-900 dark:text-blue-100 leading-5">{currentQuestion.explanation}</Text>
           </View>
         )}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Button 
-          mode="contained" 
+      {/* Footer */}
+      <View className="absolute bottom-0 left-0 right-0 p-5 bg-white dark:bg-black border-t border-slate-100 dark:border-slate-900">
+        <TouchableOpacity 
           onPress={handleNext} 
           disabled={!isOptionSelected}
-          style={styles.nextButton}
+          className={`py-4 rounded-xl items-center ${!isOptionSelected ? 'bg-slate-200 dark:bg-slate-800' : 'bg-indigo-600'}`}
         >
-          {currentQuestionIndex === questions.length - 1 ? "Finish" : "Next Question"}
-        </Button>
+          <Text className={`font-bold text-lg ${!isOptionSelected ? 'text-slate-400 dark:text-slate-600' : 'text-white'}`}>
+            {currentQuestionIndex === questions.length - 1 ? "Finish Quiz" : "Next Question"}
+          </Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scrollContent: { padding: 16, paddingBottom: 100 },
-  header: { marginBottom: 20 },
-  progressBar: { height: 8, borderRadius: 5, marginTop: 8 },
-  card: { marginBottom: 20, elevation: 2 },
-  questionText: { fontWeight: 'bold' },
-  optionsContainer: { gap: 12 },
-  optionCard: { padding: 8, borderWidth: 1, borderColor: '#eee' },
-  optionRow: { flexDirection: 'row', alignItems: 'center' },
-  optionText: { fontSize: 16, flex: 1 },
-  explanationBox: { marginTop: 20, padding: 15, backgroundColor: '#e3f2fd', borderRadius: 8, borderLeftWidth: 4, borderLeftColor: '#2196f3' },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#eee' },
-  resultContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  emoji: { fontSize: 80, marginBottom: 20 },
-  scoreText: { marginVertical: 10, color: '#6200ee', fontWeight: 'bold' },
-  button: { marginTop: 20, width: '100%' }
-});
