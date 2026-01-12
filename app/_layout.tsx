@@ -1,24 +1,14 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <Stack screenOptions={{ headerShown: false }}>
+      {/* This points to your new app/index.tsx */}
+      <Stack.Screen name="index" /> 
+      {/* This allows the modal presentation for adding notes */}
+      <Stack.Screen name="add-note" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen name="note-detail" options={{ headerShown: false }} />
+      <Stack.Screen name="quiz" options={{ headerShown: false }} />
+    </Stack>
   );
 }
