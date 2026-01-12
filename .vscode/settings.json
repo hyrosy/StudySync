@@ -3,5 +3,7 @@
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
-  }
+  },
+  "github.copilot.chat.agent.autoFix": true,
+  "chat.extensionUnification.enabled": false
 }

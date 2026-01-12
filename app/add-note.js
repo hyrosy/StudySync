@@ -12,14 +12,11 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { useNoteStore } from './store';
 
 export default function AddNoteScreen() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('General');
-  
-  const addNote = useNoteStore((state) => state.addNote);
 
   const handleSave = () => {
     // 1. Validation

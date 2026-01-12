@@ -4,7 +4,6 @@ import '../global.css'; // <--- 1. Import NativeWind styles
 
 export default function RootLayout() {
   return (
-    // 2. Wrap everything in PaperProvider so buttons/themes work
     <PaperProvider>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" /> 
